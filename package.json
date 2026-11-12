@@ -1,0 +1,14 @@
+{
+  "name": "ghostlink",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GHOSTLINK // Field Interface — wrist-mounted spy gadget PWA on Cloudflare Workers",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

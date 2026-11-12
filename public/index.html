@@ -1,0 +1,1734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
+<meta name="theme-color" content="#04070d">
+<meta name="description" content="GHOSTLINK — a fictional wrist-mounted field interface: simulated radar, compass, camera recon, mission notes and diagnostics.">
+<meta name="color-scheme" content="dark">
+<title>GHOSTLINK // Field Interface</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+/* =========================================================
+   GHOSTLINK // DESIGN TOKENS
+   ========================================================= */
+:root{
+  --bg:#04070d;
+  --panel-a:rgba(9,17,26,.90);
+  --panel-b:rgba(5,10,16,.96);
+  --cyan:#00e5ff;
+  --cyan-2:#63e9ff;
+  --mag:#ff2d95;
+  --green:#2bff88;
+  --amber:#ffc400;
+  --red:#ff3b5c;
+  --text:#c9e6f2;
+  --muted:#5d7f92;
+  --line:rgba(0,229,255,.18);
+  --fd:'Orbitron',system-ui,sans-serif;
+  --fm:'Share Tech Mono',ui-monospace,monospace;
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-t:env(safe-area-inset-top,0px);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+
+html,body{margin:0;padding:0;height:100%}
+
+body{
+  background:radial-gradient(circle at 50% 0%,#0a1a26 0%,#04070d 62%) fixed;
+  color:var(--text);
+  font-family:var(--fm);
+  font-size:14px;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+
+/* ---------- ambient FX (decorative, disabled under reduced motion) ---------- */
+body::before,
+body::after{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+}
+body::before{
+  background-image:
+    linear-gradient(rgba(0,229,255,.045) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,229,255,.045) 1px,transparent 1px);
+  background-size:46px 46px;
+  -webkit-mask-image:radial-gradient(circle at 50% 30%,#000 20%,transparent 85%);
+  mask-image:radial-gradient(circle at 50% 30%,#000 20%,transparent 85%);
+}
+body::after{
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.20) 0,rgba(0,0,0,.20) 1px,transparent 1px,transparent 3px);
+  opacity:.45;
+}
+
+/* ---------- shell ---------- */
+.app{
+  position:relative;z-index:1;
+  display:flex;flex-direction:column;
+  height:100dvh;height:100vh;
+  max-width:560px;margin:0 auto;
+}
+
+@media (min-width:620px){
+  .app{border-left:1px solid var(--line);border-right:1px solid var(--line)}
+}
+
+/* ---------- header ---------- */
+.hud{
+  flex:0 0 auto;position:relative;z-index:3;
+  padding:calc(8px + var(--safe-t)) 12px 8px;
+  background:linear-gradient(180deg,rgba(6,14,22,.98),rgba(4,7,13,.92));
+  border-bottom:1px solid var(--line);
+}
+.hud-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.brand-mark{
+  width:26px;height:26px;flex:0 0 auto;
+  border:1px solid var(--cyan);transform:rotate(45deg);
+  display:grid;place-items:center;
+  box-shadow:0 0 14px rgba(0,229,255,.5);
+}
+.brand-mark::before{content:'';width:8px;height:8px;background:var(--mag);box-shadow:0 0 10px var(--mag)}
+.brand-txt{min-width:0}
+.brand-txt h1{
+  margin:0;font-family:var(--fd);font-weight:800;font-size:14px;
+  letter-spacing:.22em;color:#eafcff;
+  text-shadow:0 0 16px rgba(0,229,255,.6);white-space:nowrap;
+}
+.brand-txt p{
+  margin:2px 0 0;font-size:7.5px;letter-spacing:.18em;
+  color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.clock{text-align:right;flex:0 0 auto}
+#clock{font-size:14px;color:var(--cyan);letter-spacing:.08em;text-shadow:0 0 12px rgba(0,229,255,.5)}
+#date{font-size:8.5px;color:var(--muted);letter-spacing:.14em;margin-top:2px}
+
+.hud-chips{display:flex;gap:6px;margin-top:8px;overflow-x:auto;scrollbar-width:none}
+.hud-chips::-webkit-scrollbar{display:none}
+.chip{
+  flex:0 0 auto;font-family:var(--fm);font-size:8.5px;letter-spacing:.12em;
+  padding:5px 8px;border:1px solid rgba(0,229,255,.22);border-radius:2px;
+  color:var(--cyan);background:rgba(0,229,255,.05);white-space:nowrap;
+}
+.chip.ok{color:var(--green);border-color:rgba(43,255,136,.35)}
+.chip.warn{color:var(--amber);border-color:rgba(255,196,0,.35)}
+.chip.bad{color:var(--red);border-color:rgba(255,59,92,.4)}
+.btn-chip{cursor:pointer}
+.btn-chip:hover{background:rgba(0,229,255,.16)}
+
+/* ---------- main / views ---------- */
+.main{
+  flex:1 1 auto;min-height:0;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:12px 12px 16px;
+}
+.view{display:none}
+.view.active{display:block}
+
+/* ---------- panels ---------- */
+.panel{
+  position:relative;margin-bottom:10px;
+  border:1px solid var(--line);
+  background:linear-gradient(165deg,var(--panel-a),var(--panel-b));
+  box-shadow:0 10px 34px rgba(0,0,0,.5),inset 0 0 34px rgba(0,229,255,.02);
+}
+.panel::before{
+  content:'';position:absolute;inset:-1px;pointer-events:none;z-index:2;
+  background:
+    linear-gradient(var(--cyan),var(--cyan)) left top/14px 2px no-repeat,
+    linear-gradient(var(--cyan),var(--cyan)) left top/2px 14px no-repeat,
+    linear-gradient(var(--cyan),var(--cyan)) right top/14px 2px no-repeat,
+    linear-gradient(var(--cyan),var(--cyan)) right top/2px 14px no-repeat,
+    linear-gradient(var(--cyan),var(--cyan)) left bottom/14px 2px no-repeat,
+    linear-gradient(var(--cyan),var(--cyan)) left bottom/2px 14px no-repeat,
+    linear-gradient(var(--cyan),var(--cyan)) right bottom/14px 2px no-repeat,
+    linear-gradient(var(--cyan),var(--cyan)) right bottom/2px 14px no-repeat;
+  opacity:.85;
+}
+.panel-h{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:8px 10px;border-bottom:1px solid var(--line);
+  font-family:var(--fd);font-size:9px;font-weight:600;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--cyan);
+  background:linear-gradient(90deg,rgba(0,229,255,.09),transparent 70%);
+}
+.panel-b{padding:10px}
+.meta{
+  font-family:var(--fm);font-size:9px;letter-spacing:.12em;
+  color:var(--muted);text-transform:none;font-weight:400;
+}
+.note{margin:10px 0 0;font-size:10.5px;line-height:1.6;color:var(--muted)}
+.err{margin:8px 0 0;font-size:11px;line-height:1.5;color:var(--amber);min-height:0}
+
+/* ---------- buttons ---------- */
+.btn{
+  font-family:var(--fd);font-size:10px;font-weight:600;
+  letter-spacing:.12em;text-transform:uppercase;
+  min-height:46px;padding:12px 10px;cursor:pointer;
+  color:var(--cyan);border:1px solid rgba(0,229,255,.35);border-radius:2px;
+  background:linear-gradient(180deg,rgba(0,229,255,.12),rgba(0,229,255,.02));
+  transition:background .15s,box-shadow .15s,color .15s;
+}
+.btn:hover:not(:disabled){background:rgba(0,229,255,.22);color:#fff;box-shadow:0 0 18px rgba(0,229,255,.4)}
+.btn:active:not(:disabled){transform:translateY(1px)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn.primary{
+  color:#00131a;border-color:#7ef0ff;
+  background:linear-gradient(180deg,#00e5ff,#00a0bd);
+  box-shadow:0 0 18px rgba(0,229,255,.4);
+}
+.btn.primary:hover:not(:disabled){background:linear-gradient(180deg,#5cf0ff,#00bcd8);color:#00131a}
+.btn.danger{
+  color:var(--mag);border-color:rgba(255,45,149,.45);
+  background:linear-gradient(180deg,rgba(255,45,149,.12),transparent);
+}
+.btn.danger:hover:not(:disabled){background:rgba(255,45,149,.24);color:#fff;box-shadow:0 0 18px rgba(255,45,149,.4)}
+.btn-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+
+.link-btn{
+  background:none;border:1px solid rgba(0,229,255,.3);border-radius:2px;
+  color:var(--cyan);font-family:var(--fm);font-size:9px;
+  letter-spacing:.14em;padding:4px 8px;cursor:pointer;
+}
+.link-btn:hover{background:rgba(0,229,255,.15)}
+
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+
+/* ---------- radar ---------- */
+.radar-stage{position:relative;width:100%;max-width:360px;aspect-ratio:1/1;margin:0 auto}
+.radar-stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.radar-controls{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.slider-row{
+  display:flex;align-items:center;gap:10px;margin-top:10px;
+  font-size:9px;letter-spacing:.12em;color:var(--muted);
+}
+.slider-row input[type=range]{flex:1;height:30px;accent-color:#00e5ff;background:transparent}
+.slider-row b{color:var(--cyan);font-weight:400;font-size:10px;min-width:56px;text-align:right}
+
+.contacts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:11px}
+.contacts li{
+  display:flex;justify-content:space-between;gap:8px;
+  padding:7px 9px;border:1px solid rgba(0,229,255,.12);
+  background:rgba(0,229,255,.04);
+}
+.contacts li.empty{justify-content:center;color:var(--muted);border-style:dashed}
+.contacts .cid{color:var(--cyan)}
+
+/* ---------- compass ---------- */
+.compass-stage{position:relative;width:100%;max-width:300px;margin:0 auto;aspect-ratio:1/1}
+.compass-dial{position:absolute;inset:0;transform-origin:50% 50%;will-change:transform}
+.compass-dial svg{width:100%;height:100%;display:block}
+.compass-index{
+  position:absolute;top:-2px;left:50%;transform:translateX(-50%);
+  width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;
+  border-top:10px solid var(--mag);filter:drop-shadow(0 0 6px var(--mag));
+}
+.compass-read{text-align:center;margin:12px 0 14px}
+.heading{
+  font-family:var(--fd);font-weight:800;font-size:34px;line-height:1;color:#fff;
+  text-shadow:0 0 20px rgba(0,229,255,.8);
+}
+.heading small{font-size:15px;color:var(--cyan);vertical-align:top;margin-left:2px}
+.heading-card{margin-top:6px;font-size:10px;letter-spacing:.3em;color:var(--muted);text-transform:uppercase}
+
+/* ---------- camera ---------- */
+.cam-stage{
+  position:relative;width:100%;aspect-ratio:3/4;overflow:hidden;
+  border:1px solid var(--line);background:#02060a;
+}
+.cam-stage video{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;opacity:0;transition:opacity .3s;
+}
+.cam-stage.live video{opacity:1}
+.cam-overlay{
+  position:absolute;inset:0;opacity:0;transition:opacity .3s;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(0,229,255,.09) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,229,255,.09) 1px,transparent 1px);
+  background-size:33.333% 33.333%;
+}
+.cam-stage.live .cam-overlay{opacity:1}
+.cor{position:absolute;width:22px;height:22px;border:2px solid rgba(0,229,255,.85)}
+.cor.tl{top:10px;left:10px;border-right:0;border-bottom:0}
+.cor.tr{top:10px;right:10px;border-left:0;border-bottom:0}
+.cor.bl{bottom:10px;left:10px;border-right:0;border-top:0}
+.cor.br{bottom:10px;right:10px;border-left:0;border-top:0}
+.cross-h{position:absolute;left:50%;top:50%;width:44px;height:1px;background:rgba(0,229,255,.7);transform:translate(-50%,-50%)}
+.cross-v{position:absolute;left:50%;top:50%;width:1px;height:44px;background:rgba(0,229,255,.7);transform:translate(-50%,-50%)}
+
+/* ---------- mission ---------- */
+.field-label{display:block;margin:0 0 5px;font-size:9px;letter-spacing:.16em;color:var(--muted)}
+.field{
+  width:100%;margin-bottom:12px;padding:10px;
+  background:rgba(0,20,30,.55);border:1px solid var(--line);border-radius:2px;
+  color:var(--text);font-family:var(--fm);font-size:13px;line-height:1.5;
+}
+.field::placeholder{color:#3f5f70}
+textarea.field{min-height:150px;resize:vertical}
+
+.log{list-style:none;margin:0;padding:0;max-height:200px;overflow-y:auto;font-size:10.5px;line-height:1.7;color:#7fb3c4}
+.log li{display:flex;gap:8px}
+.log .lt{flex:0 0 auto;color:var(--mag);opacity:.9}
+
+/* ---------- diagnostics ---------- */
+.diag-row{
+  display:flex;justify-content:space-between;gap:12px;
+  padding:7px 0;border-bottom:1px dashed rgba(0,229,255,.1);font-size:11px;
+}
+.diag-row:last-child{border-bottom:0}
+.diag-k{color:var(--muted);font-size:9.5px;letter-spacing:.1em;flex:0 0 auto}
+.diag-v{color:var(--cyan);text-align:right;word-break:break-word}
+.diag-v.ok{color:var(--green)}
+.diag-v.warn{color:var(--amber)}
+.diag-v.bad{color:var(--red)}
+
+.loc-out{
+  margin:10px 0 0;padding:10px;min-height:64px;
+  border:1px dashed rgba(0,229,255,.2);background:rgba(0,229,255,.03);
+  color:var(--cyan-2);font-family:var(--fm);font-size:10.5px;line-height:1.6;
+  white-space:pre-wrap;word-break:break-word;
+}
+
+/* ---------- nav ---------- */
+.nav{
+  flex:0 0 auto;position:relative;z-index:3;
+  display:grid;grid-template-columns:repeat(6,1fr);gap:2px;
+  padding:6px 6px calc(6px + var(--safe-b));
+  background:rgba(5,10,16,.98);border-top:1px solid var(--line);
+}
+.nav-btn{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  min-height:52px;padding:6px 2px;cursor:pointer;
+  background:transparent;border:1px solid transparent;border-radius:2px;
+  color:var(--muted);font-family:var(--fd);font-size:8px;letter-spacing:.06em;
+  transition:color .15s,background .15s,border-color .15s;
+}
+.nav-btn svg{width:20px;height:20px;display:block}
+.nav-btn.active{
+  color:var(--cyan);border-color:var(--line);
+  background:rgba(0,229,255,.08);
+  box-shadow:inset 0 0 16px rgba(0,229,255,.12);
+}
+.nav-btn:hover{color:var(--cyan-2)}
+
+/* ---------- narrow screens ---------- */
+@media (max-width:359px){
+  .brand-txt p{display:none}
+  .brand-txt h1{font-size:12px;letter-spacing:.16em}
+  .nav-btn{font-size:7px}
+  .nav-btn svg{width:18px;height:18px}
+  .main{padding:10px 8px 14px}
+}
+
+/* ---------- reduced motion ---------- */
+@media (prefers-reduced-motion: reduce){
+  body::before,body::after{display:none}
+  *,*::before,*::after{
+    animation-duration:.001ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.001ms !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ================= HEADER ================= -->
+  <header class="hud">
+    <div class="hud-top">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div class="brand-txt">
+          <h1>GHOSTLINK</h1>
+          <p>// FIELD INTERFACE · WRIST CONSOLE</p>
+        </div>
+      </div>
+      <div class="clock">
+        <div id="clock">--:--:--</div>
+        <div id="date">---</div>
+      </div>
+    </div>
+    <div class="hud-chips">
+      <span class="chip" id="modeChip">SIM MODE</span>
+      <span class="chip" id="netChip">NET —</span>
+      <span class="chip" id="battChip">BATT —</span>
+      <button class="chip btn-chip" id="fsBtn" type="button" aria-pressed="false">FULL</button>
+    </div>
+  </header>
+
+  <!-- ================= MAIN ================= -->
+  <main class="main" id="main">
+
+    <!-- ---------- RADAR ---------- -->
+    <section class="view" data-view="radar" aria-label="Radar">
+      <div class="panel">
+        <div class="panel-h"><span>▚ Radar Array</span><span class="meta" id="radarMeta">SWEEP 000°</span></div>
+        <div class="panel-b">
+          <div class="radar-stage">
+            <canvas id="radarCanvas" role="img" aria-label="Simulated radar sweep with generated contacts"></canvas>
+          </div>
+          <div class="radar-controls">
+            <button class="btn primary" id="radarToggle" type="button">PAUSE</button>
+            <button class="btn" id="radarRefresh" type="button">REFRESH</button>
+          </div>
+          <label class="slider-row" for="radarSpeed">
+            <span>SWEEP</span>
+            <input type="range" id="radarSpeed" min="30" max="220" step="10" value="110">
+            <b id="radarSpeedVal">110°/s</b>
+          </label>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-h"><span>▚ Contact Register</span><span class="meta">SIMULATED</span></div>
+        <div class="panel-b">
+          <ul class="contacts" id="radarContacts"><li class="empty">NO CONTACTS</li></ul>
+          <p class="note">
+            Contacts are generated by a local simulation running on this device.
+            This hardware has no sonar transceiver and does not detect people,
+            objects, movement or walls.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- COMPASS ---------- -->
+    <section class="view" data-view="compass" aria-label="Compass">
+      <div class="panel">
+        <div class="panel-h"><span>▚ Compass</span><span class="meta" id="compassSource">SIMULATION</span></div>
+        <div class="panel-b">
+          <div class="compass-stage">
+            <div class="compass-dial" id="compassDial">
+              <svg id="compassSvg" viewBox="0 0 200 200" aria-hidden="true"></svg>
+            </div>
+            <div class="compass-index" aria-hidden="true"></div>
+          </div>
+          <div class="compass-read">
+            <div class="heading"><span id="compassDeg">---</span><small>°</small></div>
+            <div class="heading-card" id="compassCard">NO HEADING</div>
+          </div>
+          <button class="btn primary" id="compassEnable" type="button" style="width:100%">ENABLE DEVICE ORIENTATION</button>
+          <p class="note" id="compassNote">
+            A simulated rotation is shown. Enable the sensor for real orientation
+            readings where your device and browser support them.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- CAMERA ---------- -->
+    <section class="view" data-view="camera" aria-label="Camera">
+      <div class="panel">
+        <div class="panel-h"><span>▚ Recon Camera</span><span class="meta" id="camStatus">OFFLINE</span></div>
+        <div class="panel-b">
+          <div class="cam-stage" id="camStage">
+            <video id="camVideo" playsinline muted autoplay aria-label="Camera preview"></video>
+            <div class="cam-overlay" aria-hidden="true">
+              <span class="cor tl"></span><span class="cor tr"></span>
+              <span class="cor bl"></span><span class="cor br"></span>
+              <span class="cross-h"></span><span class="cross-v"></span>
+            </div>
+          </div>
+          <p class="note">
+            Camera access is requested only when you press START CAMERA.
+            Captured frames are saved locally to your device and are never uploaded.
+          </p>
+          <p class="err" id="camError" role="status"></p>
+          <div class="btn-row">
+            <button class="btn primary" id="camStart" type="button">START CAMERA</button>
+            <button class="btn" id="camStop" type="button">STOP</button>
+          </div>
+          <button class="btn" id="camCapture" type="button" style="width:100%;margin-top:8px">CAPTURE FRAME</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- MISSION ---------- -->
+    <section class="view" data-view="mission" aria-label="Mission">
+      <div class="panel">
+        <div class="panel-h"><span>▚ Mission Console</span><span class="meta" id="missionStatus">—</span></div>
+        <div class="panel-b">
+          <label class="field-label" for="missionTitle">MISSION TITLE</label>
+          <input class="field" id="missionTitle" type="text" maxlength="80" placeholder="Operation name" autocomplete="off">
+
+          <label class="field-label" for="missionNotes">FIELD NOTES</label>
+          <textarea class="field" id="missionNotes" placeholder="Observations, checklists, reminders… stored locally on this device only."></textarea>
+
+          <div class="btn-row">
+            <button class="btn primary" id="missionSave" type="button">SAVE</button>
+            <button class="btn" id="missionExport" type="button">EXPORT TXT</button>
+          </div>
+          <button class="btn danger" id="missionClear" type="button" style="width:100%;margin-top:8px">CLEAR NOTES</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-h"><span>▚ Activity Log</span><span class="meta">SESSION</span></div>
+        <div class="panel-b"><ul class="log" id="logList"></ul></div>
+      </div>
+    </section>
+
+    <!-- ---------- DIAGNOSTICS ---------- -->
+    <section class="view" data-view="diag" aria-label="Diagnostics">
+      <div class="panel">
+        <div class="panel-h">
+          <span>▚ Diagnostics</span>
+          <button class="link-btn" id="diagRefresh" type="button">REFRESH</button>
+        </div>
+        <div class="panel-b"><div id="diagRows"></div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-h"><span>▚ Location</span><span class="meta">OPT-IN</span></div>
+        <div class="panel-b">
+          <button class="btn" id="locBtn" type="button" style="width:100%">REQUEST LOCATION</button>
+          <pre class="loc-out" id="locOut">No location requested.</pre>
+          <p class="note">
+            Location is requested only when you press the button above. Coordinates
+            are displayed locally and are never transmitted or stored.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- SOUND ---------- -->
+    <section class="view" data-view="sound" aria-label="Sound">
+      <div class="panel">
+        <div class="panel-h"><span>▚ Audio Synthesis</span><span class="meta" id="soundState">—</span></div>
+        <div class="panel-b">
+          <button class="btn" id="soundToggle" type="button" style="width:100%;margin-bottom:8px">MUTE AUDIO</button>
+          <div class="btn-row" style="grid-template-columns:1fr 1fr">
+            <button class="btn" id="sndPing" type="button">PING</button>
+            <button class="btn" id="sndAlert" type="button">ALERT</button>
+            <button class="btn" id="sndScan" type="button">SCAN START</button>
+            <button class="btn" id="sndStop" type="button">STOP AUDIO</button>
+          </div>
+          <p class="note">
+            All sounds are synthesised locally with the Web Audio API. No audio
+            files are downloaded, and audio only starts after you interact with
+            the page.
+          </p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ================= NAV ================= -->
+  <nav class="nav" aria-label="Primary">
+    <button class="nav-btn" data-target="radar" type="button" aria-current="page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12 L19 7.5"/>
+      </svg>
+      <span>RADAR</span>
+    </button>
+    <button class="nav-btn" data-target="compass" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9"/><path d="M15.5 8.5 L13 13 L8.5 15.5 L11 11 Z"/>
+      </svg>
+      <span>COMPASS</span>
+    </button>
+    <button class="nav-btn" data-target="camera" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="7" width="18" height="13" rx="2"/><circle cx="12" cy="13.5" r="4"/><path d="M8.5 7 L10 4 h4 l1.5 3"/>
+      </svg>
+      <span>CAMERA</span>
+    </button>
+    <button class="nav-btn" data-target="mission" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>
+      </svg>
+      <span>MISSION</span>
+    </button>
+    <button class="nav-btn" data-target="diag" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M2 12h4l2.5-7 3.5 14 3-7h7"/>
+      </svg>
+      <span>DIAG</span>
+    </button>
+    <button class="nav-btn" data-target="sound" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/>
+      </svg>
+      <span>SOUND</span>
+    </button>
+  </nav>
+
+</div>
+
+<noscript>
+  <p style="padding:20px;color:#ffc400;font-family:monospace">
+    GHOSTLINK requires JavaScript to operate.
+  </p>
+</noscript>
+
+<script>
+/* =========================================================
+   GHOSTLINK // FIELD INTERFACE
+   Application core — modular IIFE namespaces.
+   ========================================================= */
+(function () {
+  'use strict';
+
+  /* -------------------------------------------------------
+     0. UTILITIES
+     ------------------------------------------------------- */
+  var $  = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+
+  var DEG = Math.PI / 180;
+  var REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var CARDS = ['N','NNE','NE','ENE','E','ESE','SE','SSE',
+               'S','SSW','SW','WSW','W','WNW','NW','NNW'];
+
+  function norm(deg) { return ((deg % 360) + 360) % 360; }
+  function cardinal(deg) { return CARDS[Math.round(norm(deg) / 22.5) % 16]; }
+  function pad3(deg) { return String(Math.round(norm(deg)) % 360).padStart(3, '0'); }
+  function timeStr(d) { return d.toLocaleTimeString([], { hour12: false }); }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+
+  function download(filename, text, mime) {
+    var blob = new Blob([text], { type: mime || 'text/plain' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+  }
+
+  /* -------------------------------------------------------
+     1. STORAGE MANAGER
+     ------------------------------------------------------- */
+  var Store = (function () {
+    var available = false;
+    try {
+      localStorage.setItem('__gl_probe', '1');
+      localStorage.removeItem('__gl_probe');
+      available = true;
+    } catch (e) { available = false; }
+
+    return {
+      get ok() { return available; },
+      get: function (key, fallback) {
+        if (!available) return fallback;
+        try {
+          var raw = localStorage.getItem('gl_' + key);
+          return raw === null ? fallback : JSON.parse(raw);
+        } catch (e) { return fallback; }
+      },
+      set: function (key, value) {
+        if (!available) return false;
+        try {
+          localStorage.setItem('gl_' + key, JSON.stringify(value));
+          return true;
+        } catch (e) { return false; }
+      },
+      del: function (key) {
+        if (!available) return false;
+        try { localStorage.removeItem('gl_' + key); return true; }
+        catch (e) { return false; }
+      }
+    };
+  })();
+
+  /* -------------------------------------------------------
+     2. ACTIVITY LOG
+     ------------------------------------------------------- */
+  var Log = (function () {
+    var entries = [];
+    var MAX = 60;
+    var listEl = null;
+
+    function render() {
+      if (!listEl) return;
+      if (!entries.length) {
+        listEl.innerHTML = '<li><span class="lt">--:--:--</span> No events yet</li>';
+        return;
+      }
+      var out = '';
+      for (var i = entries.length - 1; i >= 0; i--) {
+        out += '<li><span class="lt">' + entries[i].t + '</span> ' +
+               escapeHtml(entries[i].m) + '</li>';
+      }
+      listEl.innerHTML = out;
+    }
+
+    return {
+      init: function (el) { listEl = el; render(); },
+      add: function (msg) {
+        entries.push({ t: timeStr(new Date()), m: msg });
+        if (entries.length > MAX) entries.shift();
+        render();
+      }
+    };
+  })();
+
+  /* -------------------------------------------------------
+     3. AUDIO MODULE (Web Audio API, locally generated)
+     ------------------------------------------------------- */
+  var Audio2 = (function () {
+    var ctx = null;
+    var enabled = true;
+
+    function acquire() {
+      if (!enabled) return null;
+      if (!ctx) {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        try { ctx = new AC(); } catch (e) { return null; }
+      }
+      if (ctx.state === 'suspended') { ctx.resume().catch(function () {}); }
+      return ctx;
+    }
+
+    function tone(freq, start, dur, type, vol, slideTo) {
+      var c = acquire();
+      if (!c) return;
+      try {
+        var t0 = c.currentTime + (start || 0);
+        var osc = c.createOscillator();
+        var gain = c.createGain();
+        osc.type = type || 'sine';
+        osc.frequency.setValueAtTime(freq, t0);
+        if (slideTo) {
+          osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+        }
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.linearRampToValueAtTime(vol || 0.12, t0 + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+        osc.connect(gain);
+        gain.connect(c.destination);
+        osc.start(t0);
+        osc.stop(t0 + dur + 0.06);
+      } catch (e) { /* audio is non-critical */ }
+    }
+
+    return {
+      get enabled() { return enabled; },
+      setEnabled: function (v) {
+        enabled = !!v;
+        if (!enabled && ctx) { try { ctx.suspend(); } catch (e) {} }
+        if (enabled && ctx) { try { ctx.resume(); } catch (e) {} }
+      },
+      ping:  function () { tone(1100, 0, 0.34, 'sine', 0.13, 620); },
+      alert: function () { tone(880, 0, 0.09, 'square', 0.09); tone(1320, 0.12, 0.12, 'square', 0.09); },
+      scan:  function () { tone(300, 0, 0.45, 'sawtooth', 0.045, 1400); },
+      tap:   function () { tone(1500, 0, 0.045, 'sine', 0.05); },
+      stop:  function () { if (ctx) { try { ctx.suspend(); } catch (e) {} } }
+    };
+  })();
+
+  /* -------------------------------------------------------
+     4. FULLSCREEN
+     ------------------------------------------------------- */
+  var FS = (function () {
+    var el = document.documentElement;
+    var supported = !!(el.requestFullscreen || el.webkitRequestFullscreen);
+    var btn = null;
+
+    function sync() {
+      var on = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      if (btn) {
+        btn.textContent = on ? 'EXIT' : 'FULL';
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        btn.setAttribute('aria-label', on ? 'Exit fullscreen' : 'Enter fullscreen');
+      }
+    }
+
+    return {
+      get supported() { return supported; },
+      init: function () {
+        btn = $('#fsBtn');
+        if (!supported) {
+          btn.disabled = true;
+          btn.textContent = 'N/A';
+          btn.setAttribute('aria-label', 'Fullscreen not supported');
+          return;
+        }
+        btn.addEventListener('click', function () {
+          var on = !!(document.fullscreenElement || document.webkitFullscreenElement);
+          var p;
+          try {
+            if (!on) {
+              p = el.requestFullscreen ? el.requestFullscreen() : el.webkitRequestFullscreen();
+            } else {
+              p = document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen();
+            }
+            if (p && p.catch) p.catch(function () { Log.add('Fullscreen request rejected'); });
+          } catch (e) {
+            Log.add('Fullscreen request failed');
+          }
+        });
+        document.addEventListener('fullscreenchange', sync);
+        document.addEventListener('webkitfullscreenchange', sync);
+        sync();
+      },
+      sync: sync,
+      isOn: function () {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement);
+      }
+    };
+  })();
+
+  /* -------------------------------------------------------
+     5. NAVIGATION MANAGER
+     ------------------------------------------------------- */
+  var Nav = (function () {
+    var current = null;
+    var hooks = {};
+
+    function show(name) {
+      if (current === name) return;
+      var prev = current;
+      current = name;
+
+      $$('.view').forEach(function (v) {
+        v.classList.toggle('active', v.getAttribute('data-view') === name);
+      });
+      $$('.nav-btn').forEach(function (b) {
+        var on = b.getAttribute('data-target') === name;
+        b.classList.toggle('active', on);
+        if (on) b.setAttribute('aria-current', 'page');
+        else b.removeAttribute('aria-current');
+      });
+
+      if (hooks[prev] && hooks[prev].leave) { try { hooks[prev].leave(); } catch (e) {} }
+      if (hooks[name] && hooks[name].enter) { try { hooks[name].enter(); } catch (e) {} }
+
+      var main = $('#main');
+      if (main) main.scrollTop = 0;
+      Log.add('MODE → ' + name.toUpperCase());
+    }
+
+    return {
+      register: function (name, h) { hooks[name] = h || {}; },
+      show: show,
+      init: function () {
+        $$('.nav-btn').forEach(function (b) {
+          b.addEventListener('click', function () {
+            Audio2.tap();
+            show(b.getAttribute('data-target'));
+          });
+        });
+        show('radar');
+      }
+    };
+  })();
+
+  /* -------------------------------------------------------
+     6. RADAR MODULE (simulation only)
+     ------------------------------------------------------- */
+  var Radar = (function () {
+    var cv, ctx, metaEl, toggleBtn, refreshBtn, speedEl, speedValEl, listEl;
+
+    var W = 1, H = 1, cx = 0, cy = 0, R = 1;
+    var angle = 0;
+    var running = true;
+    var speed = REDUCED ? 45 : 110;
+    var raf = 0;
+    var lastT = 0;
+    var contacts = [];
+    var nextId = 1;
+    var spawnIn = 0.6;
+    var listTick = 0;
+
+    function resize() {
+      if (!cv) return;
+      var rect = cv.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      W = Math.max(1, Math.round(rect.width));
+      H = Math.max(1, Math.round(rect.height));
+      cv.width = Math.round(W * dpr);
+      cv.height = Math.round(H * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      cx = W / 2;
+      cy = H / 2;
+      R = Math.min(W, H) / 2 - 8;
+    }
+
+    function draw(t) {
+      if (!ctx) return;
+      ctx.clearRect(0, 0, W, H);
+
+      /* backdrop */
+      var g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+      g.addColorStop(0, 'rgba(0,229,255,0.10)');
+      g.addColorStop(0.7, 'rgba(0,229,255,0.03)');
+      g.addColorStop(1, 'rgba(0,80,110,0.02)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.fill();
+
+      /* range rings */
+      for (var i = 1; i <= 4; i++) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, (R * i) / 4, 0, Math.PI * 2);
+        ctx.strokeStyle = i === 4 ? 'rgba(0,229,255,0.45)' : 'rgba(0,229,255,0.14)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      /* crosshair */
+      ctx.beginPath();
+      ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy);
+      ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R);
+      ctx.strokeStyle = 'rgba(0,229,255,0.10)';
+      ctx.stroke();
+
+      /* ticks + cardinals */
+      ctx.font = '600 9px Orbitron, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (var a = 0; a < 360; a += 15) {
+        var rad = (a - 90) * DEG;
+        var major = a % 45 === 0;
+        var r1 = R - 3;
+        var r2 = R - (major ? 13 : 8);
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(rad) * r1, cy + Math.sin(rad) * r1);
+        ctx.lineTo(cx + Math.cos(rad) * r2, cy + Math.sin(rad) * r2);
+        ctx.strokeStyle = major ? 'rgba(0,229,255,0.7)' : 'rgba(0,229,255,0.2)';
+        ctx.stroke();
+
+        if (a % 90 === 0) {
+          var lbl = ['N', 'E', 'S', 'W'][a / 90];
+          ctx.fillStyle = a === 0 ? '#ff2d95' : 'rgba(120,220,240,0.85)';
+          ctx.fillText(lbl, cx + Math.cos(rad) * (R - 26), cy + Math.sin(rad) * (R - 26));
+        }
+      }
+
+      /* sweep trail */
+      var slices = 26, trail = 70, step = trail / slices;
+      for (var s = 0; s < slices; s++) {
+        var a1 = (angle - (s + 1) * step - 90) * DEG;
+        var a2 = (angle - s * step - 90) * DEG;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, R, a1, a2, false);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(0,229,255,' + (0.22 * (1 - s / slices)).toFixed(3) + ')';
+        ctx.fill();
+      }
+
+      /* sweep line */
+      var sa = (angle - 90) * DEG;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(sa) * R, cy + Math.sin(sa) * R);
+      ctx.strokeStyle = 'rgba(160,250,255,0.95)';
+      ctx.lineWidth = 1.6;
+      ctx.shadowColor = 'rgba(0,229,255,0.9)';
+      ctx.shadowBlur = 12;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.lineWidth = 1;
+
+      /* contacts */
+      for (var k = 0; k < contacts.length; k++) {
+        var c = contacts[k];
+        var life = (t - c.born) / c.life;
+        if (life > 1) continue;
+
+        var rr = c.d * (R - 14) + 7;
+        var ar = (c.a - 90) * DEG;
+        var x = cx + Math.cos(ar) * rr;
+        var y = cy + Math.sin(ar) * rr;
+
+        var diff = Math.abs(((angle - c.a + 540) % 360) - 180);
+        var glow = Math.max(0, 1 - diff / 90);
+        var alpha = (0.16 + 0.84 * glow) * (1 - life * 0.45);
+        var pulse = REDUCED ? 1 : (0.65 + 0.35 * Math.sin((t - c.born) / 320));
+
+        ctx.beginPath();
+        ctx.arc(x, y, 2.4 + 1.6 * glow, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(180,255,255,' + Math.max(0, alpha).toFixed(3) + ')';
+        ctx.shadowColor = 'rgba(0,229,255,0.9)';
+        ctx.shadowBlur = 12 * glow;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        ctx.beginPath();
+        ctx.arc(x, y, (4 + 5 * glow) * pulse, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(0,229,255,' + Math.max(0, 0.45 * glow * (1 - life)).toFixed(3) + ')';
+        ctx.stroke();
+      }
+
+      /* centre */
+      ctx.beginPath();
+      ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#eafcff';
+      ctx.shadowColor = '#00e5ff';
+      ctx.shadowBlur = 14;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    function renderList() {
+      if (!listEl) return;
+      var now = performance.now();
+      var alive = contacts.filter(function (c) { return now - c.born < c.life; });
+
+      if (!alive.length) {
+        listEl.innerHTML = '<li class="empty">NO CONTACTS</li>';
+        return;
+      }
+      alive.sort(function (a, b) { return a.d - b.d; });
+      var out = '';
+      for (var i = 0; i < alive.length; i++) {
+        var c = alive[i];
+        out += '<li><span class="cid">' + c.id + '</span>' +
+               '<span>BRG ' + pad3(c.a) + '°</span>' +
+               '<span>' + Math.round(c.d * 100) + '% RNG</span></li>';
+      }
+      listEl.innerHTML = out;
+    }
+
+    function frame(t) {
+      var dt = (t - lastT) / 1000;
+      if (!isFinite(dt) || dt < 0) dt = 0;
+      dt = Math.min(dt, 0.1);
+      lastT = t;
+
+      if (running) {
+        angle = norm(angle + speed * dt);
+
+        contacts = contacts.filter(function (c) { return t - c.born < c.life; });
+
+        spawnIn -= dt;
+        if (spawnIn <= 0 && contacts.length < 7) {
+          contacts.push({
+            id: 'SIM-' + String(nextId++).padStart(2, '0'),
+            a: Math.random() * 360,
+            d: 0.15 + Math.random() * 0.8,
+            born: t,
+            life: 8000 + Math.random() * 9000
+          });
+          spawnIn = 1.2 + Math.random() * 2.2;
+        }
+
+        if (metaEl) metaEl.textContent = 'SWEEP ' + pad3(angle) + '°';
+
+        listTick += dt;
+        if (listTick > 0.3) { listTick = 0; renderList(); }
+      }
+
+      draw(t);
+      raf = requestAnimationFrame(frame);
+    }
+
+    function start() {
+      if (raf) return;
+      lastT = performance.now();
+      raf = requestAnimationFrame(frame);
+    }
+
+    function stop() {
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    }
+
+    function refresh(silent) {
+      contacts = [];
+      nextId = 1;
+      spawnIn = 0;
+      var now = performance.now();
+      var n = 3 + Math.floor(Math.random() * 3);
+      for (var i = 0; i < n; i++) {
+        contacts.push({
+          id: 'SIM-' + String(nextId++).padStart(2, '0'),
+          a: Math.random() * 360,
+          d: 0.15 + Math.random() * 0.8,
+          born: now,
+          life: 8000 + Math.random() * 9000
+        });
+      }
+      renderList();
+      if (!silent) {
+        Log.add('Radar simulation refreshed');
+        Audio2.scan();
+      }
+    }
+
+    return {
+      init: function () {
+        cv = $('#radarCanvas');
+        if (!cv) return;
+        ctx = cv.getContext('2d');
+        metaEl = $('#radarMeta');
+        toggleBtn = $('#radarToggle');
+        refreshBtn = $('#radarRefresh');
+        speedEl = $('#radarSpeed');
+        speedValEl = $('#radarSpeedVal');
+        listEl = $('#radarContacts');
+
+        speed = Number(speedEl.value) || speed;
+        speedValEl.textContent = speed + '°/s';
+
+        resize();
+        refresh(true);
+
+        toggleBtn.addEventListener('click', function () {
+          running = !running;
+          toggleBtn.textContent = running ? 'PAUSE' : 'RESUME';
+          toggleBtn.classList.toggle('primary', running);
+          Log.add('Radar ' + (running ? 'resumed' : 'paused'));
+          Audio2.tap();
+        });
+
+        refreshBtn.addEventListener('click', function () { refresh(false); });
+
+        speedEl.addEventListener('input', function () {
+          speed = Number(speedEl.value) || 110;
+          speedValEl.textContent = speed + '°/s';
+        });
+
+        if (window.ResizeObserver) {
+          new ResizeObserver(function () { resize(); }).observe(cv);
+        } else {
+          window.addEventListener('resize', resize);
+        }
+      },
+      resize: resize,
+      start: function () { resize(); start(); },
+      stop: stop,
+      refresh: refresh
+    };
+  })();
+
+  /* -------------------------------------------------------
+     7. COMPASS MODULE
+     ------------------------------------------------------- */
+  var Compass = (function () {
+    var dialEl, svgEl, degEl, cardEl, srcEl, noteEl, enableBtn;
+
+    var sensorHeading = null;
+    var sensorKind = null;      /* 'abs' | 'rel' | null */
+    var shown = 0;
+    var raf = 0;
+    var bound = false;
+    var lastLabel = '';
+
+    var LABELS = {
+      sim: 'SIMULATION',
+      abs: 'SENSOR · ABSOLUTE',
+      rel: 'SENSOR · RELATIVE'
+    };
+
+    function build() {
+      var s = [];
+      s.push('<circle cx="100" cy="100" r="97" fill="none" stroke="rgba(0,229,255,0.22)" stroke-width="1"/>');
+      s.push('<circle cx="100" cy="100" r="70" fill="none" stroke="rgba(0,229,255,0.10)" stroke-width="1" stroke-dasharray="2 6"/>');
+
+      for (var a = 0; a < 360; a += 5) {
+        var major = a % 45 === 0;
+        var mid = a % 15 === 0;
+        var r1 = 93;
+        var r2 = major ? 80 : (mid ? 85 : 89);
+        var rad = a * DEG;
+        var x1 = 100 + Math.sin(rad) * r1;
+        var y1 = 100 - Math.cos(rad) * r1;
+        var x2 = 100 + Math.sin(rad) * r2;
+        var y2 = 100 - Math.cos(rad) * r2;
+        var stroke = major ? 'rgba(0,229,255,0.9)'
+                   : mid   ? 'rgba(0,229,255,0.45)'
+                           : 'rgba(0,229,255,0.18)';
+        s.push('<line x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) +
+               '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) +
+               '" stroke="' + stroke + '" stroke-width="' + (major ? 2 : 1) + '"/>');
+      }
+
+      ['N', 'E', 'S', 'W'].forEach(function (txt, i) {
+        var rad = i * 90 * DEG;
+        var x = 100 + Math.sin(rad) * 62;
+        var y = 100 - Math.cos(rad) * 62;
+        s.push('<text x="' + x.toFixed(1) + '" y="' + y.toFixed(1) +
+               '" text-anchor="middle" dominant-baseline="central"' +
+               ' font-family="Orbitron,sans-serif" font-weight="700" font-size="' +
+               (txt === 'N' ? 15 : 11) + '" fill="' +
+               (txt === 'N' ? '#ff2d95' : '#63c9dd') + '">' + txt + '</text>');
+      });
+
+      s.push('<path d="M100 40 L104 100 L100 95 L96 100 Z" fill="#ff2d95" opacity="0.9"/>');
+      s.push('<path d="M100 160 L104 100 L100 105 L96 100 Z" fill="#00e5ff" opacity="0.35"/>');
+      s.push('<circle cx="100" cy="100" r="3" fill="#eafcff"/>');
+
+      if (svgEl) svgEl.innerHTML = s.join('');
+    }
+
+    function onOrient(e) {
+      var h = null;
+      var kind = null;
+
+      if (typeof e.webkitCompassHeading === 'number' &&
+          isFinite(e.webkitCompassHeading) && e.webkitCompassHeading >= 0) {
+        h = e.webkitCompassHeading;
+        kind = 'abs';
+      } else if (e.alpha !== null && e.alpha !== undefined) {
+        h = norm(360 - e.alpha);
+        kind = (e.absolute === true) ? 'abs' : 'rel';
+      }
+
+      if (h === null) return;
+      /* never downgrade a known absolute heading to relative */
+      if (kind === 'rel' && sensorKind === 'abs') return;
+
+      sensorHeading = h;
+      sensorKind = kind;
+    }
+
+    function attach() {
+      if (bound) return;
+      bound = true;
+      window.addEventListener('deviceorientationabsolute', onOrient, true);
+      window.addEventListener('deviceorientation', onOrient, true);
+    }
+
+    function requestSensor() {
+      if (typeof DeviceOrientationEvent === 'undefined') {
+        if (noteEl) noteEl.textContent = 'Device orientation API is unavailable in this browser. Simulation remains active.';
+        if (enableBtn) { enableBtn.disabled = true; enableBtn.textContent = 'SENSOR UNAVAILABLE'; }
+        Log.add('Device orientation API unavailable');
+        return;
+      }
+
+      var perm = DeviceOrientationEvent.requestPermission;
+      if (typeof perm === 'function') {
+        perm.call(DeviceOrientationEvent).then(function (res) {
+          if (res === 'granted') { attach(); onEnabled(); }
+          else {
+            if (noteEl) noteEl.textContent = 'Orientation permission was denied. Simulation remains active.';
+            Log.add('Orientation permission denied');
+          }
+        }).catch(function () {
+          if (noteEl) noteEl.textContent = 'Orientation permission request failed. Simulation remains active.';
+          Log.add('Orientation permission error');
+        });
+      } else {
+        attach();
+        onEnabled();
+      }
+    }
+
+    function onEnabled() {
+      if (enableBtn) {
+        enableBtn.disabled = true;
+        enableBtn.textContent = 'SENSOR LISTENER ACTIVE';
+      }
+      if (noteEl) {
+        noteEl.textContent = 'Sensor listeners are active. If readings are unavailable or uncalibrated, they will be labelled accordingly.';
+      }
+      Log.add('Compass sensor enabled');
+    }
+
+    function frame(t) {
+      var target;
+      var label;
+
+      if (sensorHeading !== null) {
+        target = sensorHeading;
+        label = sensorKind === 'abs' ? LABELS.abs : LABELS.rel;
+      } else {
+        target = (t / 1000 * 9) % 360;
+        label = LABELS.sim;
+      }
+
+      var delta = ((target - shown + 540) % 360) - 180;
+      shown = norm(shown + delta * 0.18);
+
+      if (dialEl) dialEl.style.transform = 'rotate(' + (-shown).toFixed(2) + 'deg)';
+      if (degEl) degEl.textContent = pad3(shown);
+      if (cardEl) cardEl.textContent = cardinal(shown) + ' · ' + Math.round(shown) + '°';
+
+      if (label !== lastLabel) {
+        lastLabel = label;
+        if (srcEl) srcEl.textContent = label;
+        if (sensorKind === 'rel' && noteEl) {
+          noteEl.textContent = 'Relative device orientation only — this is not a calibrated magnetic heading.';
+        }
+      }
+
+      raf = requestAnimationFrame(frame);
+    }
+
+    function start() {
+      if (raf) return;
+      raf = requestAnimationFrame(frame);
+    }
+    function stop() {
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    }
+
+    return {
+      init: function () {
+        dialEl = $('#compassDial');
+        svgEl = $('#compassSvg');
+        degEl = $('#compassDeg');
+        cardEl = $('#compassCard');
+        srcEl = $('#compassSource');
+        noteEl = $('#compassNote');
+        enableBtn = $('#compassEnable');
+
+        build();
+        if (enableBtn) enableBtn.addEventListener('click', requestSensor);
+        if (srcEl) srcEl.textContent = LABELS.sim;
+      },
+      start: start,
+      stop: stop
+    };
+  })();
+
+  /* -------------------------------------------------------
+     8. CAMERA MODULE
+     ------------------------------------------------------- */
+  var Camera = (function () {
+    var video, stage, statusEl, errEl;
+    var stream = null;
+
+    function describeError(e) {
+      var name = e && e.name ? e.name : '';
+      if (name === 'NotAllowedError' || name === 'SecurityError') {
+        return 'Camera permission was denied. Enable it in your browser settings and try again.';
+      }
+      if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+        return 'No usable camera was found on this device.';
+      }
+      if (name === 'NotReadableError') {
+        return 'The camera is already in use by another app or tab.';
+      }
+      return 'Camera could not be started: ' + (e && e.message ? e.message : 'unknown error') + '.';
+    }
+
+    function start() {
+      if (errEl) errEl.textContent = '';
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        if (errEl) errEl.textContent = 'Camera API is unavailable in this browser.';
+        if (statusEl) statusEl.textContent = 'UNAVAILABLE';
+        return;
+      }
+      if (stream) return;
+
+      if (statusEl) statusEl.textContent = 'REQUESTING';
+
+      navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: 'environment' },
+          width:  { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      }).then(function (s) {
+        stream = s;
+        video.srcObject = s;
+        stage.classList.add('live');
+        var p = video.play();
+        if (p && p.catch) p.catch(function () {});
+        if (statusEl) statusEl.textContent = 'ACTIVE';
+        Log.add('Camera started');
+      }).catch(function (e) {
+        stream = null;
+        if (statusEl) statusEl.textContent = 'DENIED';
+        if (errEl) errEl.textContent = describeError(e);
+        Log.add('Camera error: ' + (e && e.name ? e.name : 'unknown'));
+      });
+    }
+
+    function stop(silent) {
+      if (!stream) {
+        if (!silent && statusEl) statusEl.textContent = 'OFFLINE';
+        return;
+      }
+      try {
+        stream.getTracks().forEach(function (t) { t.stop(); });
+      } catch (e) { /* ignore */ }
+      stream = null;
+      if (video) video.srcObject = null;
+      if (stage) stage.classList.remove('live');
+      if (statusEl) statusEl.textContent = 'OFFLINE';
+      if (!silent) Log.add('Camera stopped');
+    }
+
+    function capture() {
+      if (!stream || !video || !video.videoWidth) {
+        if (errEl) errEl.textContent = 'No active video frame to capture. Start the camera first.';
+        return;
+      }
+      var canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      var c2d = canvas.getContext('2d');
+      c2d.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      canvas.toBlob(function (blob) {
+        if (!blob) {
+          if (errEl) errEl.textContent = 'Frame capture failed.';
+          return;
+        }
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'ghostlink-capture-' + Date.now() + '.png';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+        if (errEl) errEl.textContent = '';
+        Log.add('Frame captured (local download)');
+        Audio2.tap();
+      }, 'image/png');
+    }
+
+    return {
+      init: function () {
+        video = $('#camVideo');
+        stage = $('#camStage');
+        statusEl = $('#camStatus');
+        errEl = $('#camError');
+        $('#camStart').addEventListener('click', start);
+        $('#camStop').addEventListener('click', function () { stop(false); });
+        $('#camCapture').addEventListener('click', capture);
+        if (statusEl) statusEl.textContent = 'OFFLINE';
+      },
+      stop: stop
+    };
+  })();
+
+  /* -------------------------------------------------------
+     9. MISSION MODULE
+     ------------------------------------------------------- */
+  var Mission = (function () {
+    var titleEl, notesEl, statusEl;
+
+    function load() {
+      titleEl.value = String(Store.get('mission_title', '') || '');
+      notesEl.value = String(Store.get('mission_notes', '') || '');
+      statusEl.textContent = Store.ok ? 'STORAGE READY' : 'SESSION ONLY';
+    }
+
+    function save() {
+      var okTitle = Store.set('mission_title', titleEl.value);
+      var okNotes = Store.set('mission_notes', notesEl.value);
+      if (okTitle && okNotes) {
+        statusEl.textContent = 'SAVED ' + timeStr(new Date());
+        Log.add('Mission notes saved');
+      } else {
+        statusEl.textContent = 'SAVE FAILED';
+        Log.add('Mission save failed — storage unavailable');
+      }
+    }
+
+    function exportTxt() {
+      var body = [
+        'GHOSTLINK // FIELD INTERFACE',
+        'MISSION RECORD',
+        'Exported: ' + new Date().toISOString(),
+        '',
+        'TITLE:',
+        (titleEl.value || '(untitled)'),
+        '',
+        'NOTES:',
+        (notesEl.value || '(empty)'),
+        '',
+        '--- END OF RECORD ---'
+      ].join('\n');
+
+      download('ghostlink-mission-' + Date.now() + '.txt', body, 'text/plain');
+      Log.add('Mission exported as TXT');
+    }
+
+    function clear() {
+      var confirmed = window.confirm(
+        'Clear the mission title and notes? This cannot be undone.'
+      );
+      if (!confirmed) return;
+      titleEl.value = '';
+      notesEl.value = '';
+      Store.del('mission_title');
+      Store.del('mission_notes');
+      statusEl.textContent = 'CLEARED';
+      Log.add('Mission notes cleared');
+    }
+
+    return {
+      init: function () {
+        titleEl = $('#missionTitle');
+        notesEl = $('#missionNotes');
+        statusEl = $('#missionStatus');
+        load();
+        $('#missionSave').addEventListener('click', save);
+        $('#missionExport').addEventListener('click', exportTxt);
+        $('#missionClear').addEventListener('click', clear);
+      }
+    };
+  })();
+
+  /* -------------------------------------------------------
+     10. SOUND MODULE (UI)
+     ------------------------------------------------------- */
+  var Sound = (function () {
+    var stateEl, toggleBtn;
+
+    function sync() {
+      var on = Audio2.enabled;
+      stateEl.textContent = on ? 'AUDIO ENABLED' : 'AUDIO MUTED';
+      stateEl.className = 'meta';
+      stateEl.style.color = on ? 'var(--green)' : 'var(--amber)';
+      toggleBtn.textContent = on ? 'MUTE AUDIO' : 'ENABLE AUDIO';
+    }
+
+    return {
+      init: function () {
+        stateEl = $('#soundState');
+        toggleBtn = $('#soundToggle');
+
+        toggleBtn.addEventListener('click', function () {
+          Audio2.setEnabled(!Audio2.enabled);
+          sync();
+          Log.add('Audio ' + (Audio2.enabled ? 'enabled' : 'muted'));
+        });
+
+        $('#sndPing').addEventListener('click', function () {
+          Audio2.ping(); Log.add('Sound effect: ping');
+        });
+        $('#sndAlert').addEventListener('click', function () {
+          Audio2.alert(); Log.add('Sound effect: alert');
+        });
+        $('#sndScan').addEventListener('click', function () {
+          Audio2.scan(); Log.add('Sound effect: scan start');
+        });
+        $('#sndStop').addEventListener('click', function () {
+          Audio2.stop(); Log.add('Audio output suspended');
+        });
+
+        sync();
+      }
+    };
+  })();
+
+  /* -------------------------------------------------------
+     11. DIAGNOSTICS MODULE
+     ------------------------------------------------------- */
+  var Diag = (function () {
+    var rowsEl;
+    var battery = null;
+
+    function row(k, v, cls) {
+      return '<div class="diag-row"><span class="diag-k">' + k +
+             '</span><span class="diag-v ' + (cls || '') + '">' + v + '</span></div>';
+    }
+
+    function render() {
+      if (!rowsEl) return;
+
+      var d = new Date();
+      var online = navigator.onLine;
+      var hasCam = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+      var hasGeo = ('geolocation' in navigator);
+      var hasOrient = (typeof DeviceOrientationEvent !== 'undefined');
+      var hasSW = ('serviceWorker' in navigator);
+      var standalone = window.matchMedia('(display-mode: standalone)').matches;
+
+      var out = '';
+      out += row('TIME', escapeHtml(d.toLocaleString()));
+      out += row('NETWORK', online ? 'ONLINE (browser-reported)' : 'OFFLINE', online ? 'ok' : 'bad');
+      out += row('VIEWPORT', window.innerWidth + ' × ' + window.innerHeight + ' @' + (window.devicePixelRatio || 1) + 'x');
+      out += row('SCREEN', screen.width + ' × ' + screen.height);
+
+      if (battery) {
+        out += row('BATTERY', Math.round(battery.level * 100) + '%' +
+          (battery.charging ? ' · CHARGING' : ' · DISCHARGING'), 'ok');
+      } else {
+        out += row('BATTERY', 'UNAVAILABLE', 'warn');
+      }
+
+      out += row('CAMERA API', hasCam ? 'AVAILABLE · PERMISSION REQUIRED' : 'UNAVAILABLE', hasCam ? '' : 'bad');
+      out += row('GEOLOCATION', hasGeo ? 'AVAILABLE · PERMISSION REQUIRED' : 'UNAVAILABLE', hasGeo ? '' : 'bad');
+      out += row('ORIENTATION', hasOrient ? 'AVAILABLE · PERMISSION REQUIRED' : 'UNAVAILABLE', hasOrient ? '' : 'bad');
+      out += row('FULLSCREEN', FS.supported ? (FS.isOn() ? 'ACTIVE' : 'AVAILABLE') : 'UNAVAILABLE', FS.supported ? 'ok' : 'warn');
+
+      var swState = !hasSW ? 'UNAVAILABLE'
+        : (navigator.serviceWorker.controller ? 'ACTIVE · SHELL CACHED' : 'REGISTERED');
+      out += row('SERVICE WORKER', swState, hasSW ? '' : 'warn');
+
+      out += row('LOCAL STORAGE', Store.ok ? 'AVAILABLE' : 'UNAVAILABLE', Store.ok ? 'ok' : 'bad');
+      out += row('DISPLAY MODE', standalone ? 'STANDALONE (installed)' : 'BROWSER');
+      out += row('RADAR SOURCE', 'SIMULATION', 'warn');
+      out += row('APP STATUS', 'OPERATIONAL', 'ok');
+
+      rowsEl.innerHTML = out;
+    }
+
+    function locate() {
+      var out = $('#locOut');
+      if (!('geolocation' in navigator)) {
+        out.textContent = 'Geolocation is unavailable in this browser.';
+        return;
+      }
+      out.textContent = 'Requesting position…';
+      navigator.geolocation.getCurrentPosition(function (pos) {
+        var c = pos.coords;
+        out.textContent =
+          'SOURCE: browser Geolocation API\n' +
+          'LAT:  ' + c.latitude.toFixed(6) + '\n' +
+          'LON:  ' + c.longitude.toFixed(6) + '\n' +
+          'ACC:  ±' + (c.accuracy ? c.accuracy.toFixed(0) : '?') + ' m';
+        Log.add('Location acquired (browser)');
+      }, function (err) {
+        var reasons = { 1: 'permission denied', 2: 'position unavailable', 3: 'timeout' };
+        out.textContent = 'Location error: ' + (reasons[err.code] || 'unknown');
+        Log.add('Location request failed');
+      }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+    }
+
+    return {
+      init: function () {
+        rowsEl = $('#diagRows');
+        render();
+        $('#diagRefresh').addEventListener('click', function () {
+          render();
+          Log.add('Diagnostics refreshed');
+          Audio2.tap();
+        });
+        $('#locBtn').addEventListener('click', locate);
+      },
+      render: render,
+      setBattery: function (b) { battery = b; render(); }
+    };
+  })();
+
+  /* -------------------------------------------------------
+     12. HEADER: clock, network, battery
+     ------------------------------------------------------- */
+  function initClock() {
+    var c = $('#clock');
+    var d = $('#date');
+    function tick() {
+      var n = new Date();
+      c.textContent = timeStr(n);
+      d.textContent = n.toLocaleDateString([], { weekday: 'short', month: 'short', day: '2-digit' });
+    }
+    tick();
+    setInterval(tick, 1000);
+  }
+
+  function syncNet() {
+    var el = $('#netChip');
+    var on = navigator.onLine;
+    el.textContent = on ? 'NET ONLINE' : 'NET OFFLINE';
+    el.className = 'chip ' + (on ? 'ok' : 'bad');
+  }
+
+  function initBattery() {
+    var chip = $('#battChip');
+    if (typeof navigator.getBattery !== 'function') {
+      chip.textContent = 'BATT —';
+      chip.className = 'chip';
+      chip.title = 'Battery API unavailable';
+      return;
+    }
+    navigator.getBattery().then(function (b) {
+      function sync() {
+        chip.textContent = 'BATT ' + Math.round(b.level * 100) + '%' + (b.charging ? ' ⚡' : '');
+        chip.className = 'chip' + (b.level <= 0.2 && !b.charging ? ' warn' : '');
+        Diag.setBattery(b);
+      }
+      sync();
+      b.addEventListener('levelchange', sync);
+      b.addEventListener('chargingchange', sync);
+    }).catch(function () {
+      chip.textContent = 'BATT —';
+      chip.className = 'chip';
+    });
+  }
+
+  /* -------------------------------------------------------
+     13. PWA REGISTRATION
+     ------------------------------------------------------- */
+  function initPwa() {
+    if (!('serviceWorker' in navigator)) {
+      Log.add('Service worker unsupported — offline shell disabled');
+      return;
+    }
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').then(function () {
+        Log.add('Service worker registered');
+      }).catch(function () {
+        Log.add('Service worker registration failed');
+      });
+    });
+  }
+
+  /* -------------------------------------------------------
+     14. INITIALISATION
+     ------------------------------------------------------- */
+  function init() {
+    Log.init($('#logList'));
+    Log.add('Application initialized');
+
+    Radar.init();
+    Compass.init();
+    Camera.init();
+    Mission.init();
+    Sound.init();
+    FS.init();
+    Diag.init();
+
+    initClock();
+    syncNet();
+    initBattery();
+
+    Nav.register('radar', {
+      enter: function () { Radar.start(); },
+      leave: function () { Radar.stop(); }
+    });
+    Nav.register('compass', {
+      enter: function () { Compass.start(); },
+      leave: function () { Compass.stop(); }
+    });
+    Nav.register('camera', {
+      leave: function () { Camera.stop(true); }
+    });
+
+    Nav.init();
+
+    window.addEventListener('online', function () {
+      syncNet(); Diag.render(); Log.add('Network online');
+    });
+    window.addEventListener('offline', function () {
+      syncNet(); Diag.render(); Log.add('Network offline');
+    });
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) Camera.stop(true);
+    });
+    window.addEventListener('pagehide', function () { Camera.stop(true); });
+
+    initPwa();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+})();
+</script>
+</body>
+</html>
